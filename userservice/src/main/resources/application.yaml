@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: userservice
+
+  kafka:
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+
+    consumer:
+      group-id: userinfo-consumer-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: com.aman.userservice.deserializer.UserInfoDeserializer
+      properties:
+        max.poll.interval.ms: 300000
+        session.timeout.ms: 45000
+        spring.json.trusted.packages: "*"
+        spring.json.type.mapping: auth:com.aman.userservice.entities.UserInfoDTO
+
+    topic-json:
+      name: user_service
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:userservice}?useSSL=false&useUnicode=yes&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+    username: root
+    password: password
+
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: create
+    # properties:
+    #   hibernate.dialect: org.hibernate.dialect.MySQL8Dialect
+    #   hbm2ddl.auto: update
+
+server:
+  port: 9810
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.apache.kafka: DEBUG
+    org.springframework.kafka: DEBUG
+
