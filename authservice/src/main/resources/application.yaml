@@ -1,3 +1,52 @@
 spring:
   application:
     name: authservice
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:authservice}?useSSL=false&useUnicode=yes&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:password}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        hbm2ddl.auto: update
+
+  kafka:
+    producer:
+      bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+      properties:
+        max.in.flight.requests.per.connection: 1
+        retries: 3
+        acks: all
+        spring.json.type.mapping: "auth:authservice.model.UserInfoEvent"
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: authservice.serializer.UserInfoSerializer
+    topic-json:
+      name: user_service
+
+server:
+  port: 9898
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    com.zaxxer.hikari: DEBUG
+    org.apache.kafka: DEBUG
+    org.springframework.kafka: DEBUG
+
+security:
+  basic:
+    enable: false
+  ignored: "/**"
