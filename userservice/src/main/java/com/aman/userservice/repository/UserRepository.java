@@ -11,4 +11,5 @@ import java.util.Optional;
 @EnableJpaRepositories
 public interface UserRepository extends CrudRepository<UserInfo, String> {
     Optional<UserInfo> findByUserId(String userId);
+    Optional<UserInfo> findByUsername(String username);
 }

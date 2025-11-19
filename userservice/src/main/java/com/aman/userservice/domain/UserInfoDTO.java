@@ -18,6 +18,10 @@ public class UserInfoDTO {
     @NonNull
     private String userId;
 
+    @JsonProperty("username")
+    @NonNull
+    private String username;
+
     @JsonProperty("first_name")
     @NonNull
     private String firstName;
@@ -27,7 +31,6 @@ public class UserInfoDTO {
     private String lastName;
 
     @JsonProperty("phone_number")
-    @NonNull
     private Long phoneNumber;
 
     @JsonProperty("email")
@@ -39,12 +42,13 @@ public class UserInfoDTO {
 
     public UserInfo transformToUserInfo() {
         return UserInfo.builder()
+                .userId(userId)
+                .username(username)
                 .firstName(firstName)
                 .lastName(lastName)
-                .userId(userId)
+                .phoneNumber(phoneNumber)
                 .email(email)
                 .profilePic(profilePic)
-                .phoneNumber(phoneNumber).build();
+                .build();
     }
-
 }

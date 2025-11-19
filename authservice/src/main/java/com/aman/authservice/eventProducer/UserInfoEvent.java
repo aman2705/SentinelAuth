@@ -18,5 +18,6 @@ public class UserInfoEvent
     private String lastName;
     private String email;
     private Long phoneNumber;
+    private String username;
     private String userId;
 }

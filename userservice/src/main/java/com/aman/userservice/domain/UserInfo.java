@@ -18,6 +18,11 @@ public class UserInfo {
     @NonNull
     private String userId;
 
+    @Column(unique = true, nullable = false)
+    @JsonProperty("username")
+    @NonNull
+    private String username;
+
     @JsonProperty("first_name")
     @NonNull
     private String firstName;
@@ -27,14 +32,13 @@ public class UserInfo {
     private String lastName;
 
     @JsonProperty("phone_number")
-    @NonNull
     private Long phoneNumber;
 
+    @Column(unique = true, nullable = false)
     @JsonProperty("email")
     @NonNull
     private String email;
 
     @JsonProperty("profile_pic")
     private String profilePic;
-
 }

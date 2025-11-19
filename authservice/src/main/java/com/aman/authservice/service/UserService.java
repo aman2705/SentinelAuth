@@ -68,6 +68,7 @@ public class UserService {
                         .firstName(user.getFirstName())
                         .lastName(user.getLastName())
                         .email(user.getEmail())
+                        .username(user.getUsername())
                         .phoneNumber(user.getPhoneNumber())
                         .build()
         );
