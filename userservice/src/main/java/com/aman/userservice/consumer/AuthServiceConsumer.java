@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 public class AuthServiceConsumer {
 
     private final UserService userService;
-    private final ObjectMapper objectMapper;
 
     @KafkaListener(
             topics = "${spring.kafka.topic-json.name}",

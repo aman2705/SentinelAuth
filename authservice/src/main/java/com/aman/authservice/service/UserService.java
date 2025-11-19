@@ -55,7 +55,7 @@ public class UserService {
                 .firstName(dto.getFirstName())
                 .lastName(dto.getLastName())
                 .email(dto.getEmail())
-                .username(dto.getUsername()) // optional
+                .username(dto.getUsername())
                 .password(passwordEncoder.encode(dto.getPassword()))
                 .roles(new HashSet<>())
                 .build();
