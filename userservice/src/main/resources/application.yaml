@@ -3,7 +3,7 @@ spring:
     name: userservice
 
   kafka:
-    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+    bootstrap-servers: localhost:9092
 
     consumer:
       group-id: userinfo-consumer-group
@@ -21,7 +21,7 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DB:userservice}?useSSL=false&useUnicode=yes&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://localhost:3307/userservice?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: root
     password: password
 
