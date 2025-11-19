@@ -5,83 +5,67 @@ import com.aman.authservice.eventProducer.UserInfoEvent;
 import com.aman.authservice.eventProducer.UserInfoProducer;
 import com.aman.authservice.model.UserInfoDTO;
 import com.aman.authservice.repository.UserRepository;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.UUID;
-
+@Slf4j
 @Component
-@AllArgsConstructor
-@Data
-public class UserDetailsServiceImpl implements UserDetailsService
-{
+@RequiredArgsConstructor
+public class UserDetailsServiceImpl implements UserDetailsService {
 
-    @Autowired
     private final UserRepository userRepository;
-
-    @Autowired
-    private final PasswordEncoder passwordEncoder;
-
-    @Autowired
     private final UserInfoProducer userInfoProducer;
 
-
-    private static final Logger log = LoggerFactory.getLogger(UserDetailsServiceImpl.class);
-
+    /**
+     * Spring Security uses this method to load a user during authentication.
+     */
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException
-    {
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        log.debug("Loading user by username: {}", username);
 
-        log.debug("Entering in loadUserByUsername Method...");
-        UserInfo user = userRepository.findByUsername(username);
-        if(user == null){
-            log.error("Username not found: " + username);
-            throw new UsernameNotFoundException("could not found user..!!");
-        }
-        log.info("User Authenticated Successfully..!!!");
+        UserInfo user = userRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    log.warn("User not found for username: {}", username);
+                    return new UsernameNotFoundException("User not found with username: " + username);
+                });
+
+        log.debug("User found: {}", username);
         return new CustomUserDetails(user);
     }
 
-    public UserInfo checkIfUserAlreadyExist(UserInfoDTO userInfoDto){
-        return userRepository.findByUsername(userInfoDto.getUsername());
+
+    /**
+     * Fetches userId for a given username.
+     * Returns null if the user does not exist.
+     */
+    public String getUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .map(UserInfo::getUserId)
+                .orElse(null);
     }
 
-    public String signupUser(UserInfoDTO userInfoDto){
-        //        ValidationUtil.validateUserAttributes(userInfoDto);
-        userInfoDto.setPassword(passwordEncoder.encode(userInfoDto.getPassword()));
-        if(Objects.nonNull(checkIfUserAlreadyExist(userInfoDto))){
-            return null;
+    /**
+     * Publishes a signup event to Kafka.
+     */
+    public void publishUserEvent(UserInfoDTO userInfoDto, String userId) {
+        if (userInfoDto == null || userId == null) {
+            log.warn("Cannot publish user event: userInfoDto or userId is null");
+            return;
         }
-        String userId = UUID.randomUUID().toString();
-        UserInfo userInfo = new UserInfo(userId, userInfoDto.getUsername(), userInfoDto.getPassword(), new HashSet<>());
-        userRepository.save(userInfo);
-        // pushEventToQueue
-        userInfoProducer.sendEventToKafka(userInfoEventToPublish(userInfoDto, userId));
-        return userId;
-    }
 
-    public String getUserByUsername(String userName){
-        return Optional.of(userRepository.findByUsername(userName)).map(UserInfo::getUserId).orElse(null);
-    }
-
-    private UserInfoEvent userInfoEventToPublish(UserInfoDTO userInfoDto, String userId){
-        return UserInfoEvent.builder()
+        UserInfoEvent event = UserInfoEvent.builder()
                 .userId(userId)
-                .firstName(userInfoDto.getUsername())
+                .firstName(userInfoDto.getFirstName())
                 .lastName(userInfoDto.getLastName())
                 .email(userInfoDto.getEmail())
-                .phoneNumber(userInfoDto.getPhoneNumber()).build();
+                .phoneNumber(userInfoDto.getPhoneNumber())
+                .build();
 
+        userInfoProducer.sendEventToKafka(event);
+        log.info("Published user signup event for userId: {}", userId);
     }
 }

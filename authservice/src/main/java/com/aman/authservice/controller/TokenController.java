@@ -7,61 +7,82 @@ import com.aman.authservice.response.JwtResponseDTO;
 import com.aman.authservice.service.JwtService;
 import com.aman.authservice.service.RefreshTokenService;
 import com.aman.authservice.service.UserDetailsServiceImpl;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Objects;
-
-@Controller
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/auth/v1")
+@Slf4j
 public class TokenController {
 
-    @Autowired
-    private AuthenticationManager authenticationManager;
+    private final AuthenticationManager authenticationManager;
+    private final RefreshTokenService refreshTokenService;
+    private final UserDetailsServiceImpl userDetailsService;
+    private final JwtService jwtService;
 
-    @Autowired
-    private RefreshTokenService refreshTokenService;
+    @PostMapping("/login")
+    public ResponseEntity<JwtResponseDTO> login(@RequestBody AuthRequestDTO authRequestDTO) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(authRequestDTO.getUsername(), authRequestDTO.getPassword())
+            );
 
-    @Autowired
-    private UserDetailsServiceImpl userDetailsService;
-
-    @Autowired
-    private JwtService jwtService;
-
-    @PostMapping("auth/v1/login")
-    public ResponseEntity AuthenticateAndGetToken(@RequestBody AuthRequestDTO authRequestDTO) {
-        Authentication authentication = authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(authRequestDTO.getUsername(), authRequestDTO.getPassword()));
-        if (authentication.isAuthenticated()) {
-            RefreshToken refreshToken = refreshTokenService.createRefreshToken(authRequestDTO.getUsername());
-            String userId = userDetailsService.getUserByUsername(authRequestDTO.getUsername());
-
-            if (Objects.nonNull(userId) && Objects.nonNull(refreshToken)) {
-                return new ResponseEntity<>(JwtResponseDTO.builder()
-                        .accessToken(jwtService.GenerateToken(authRequestDTO.getUsername()))
-                        .token(refreshToken.getToken())
-                        .build(), HttpStatus.OK);
+            if (!authentication.isAuthenticated()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
+
+            String username = authRequestDTO.getUsername();
+            RefreshToken refreshToken = refreshTokenService.createRefreshToken(username);
+            String userId = userDetailsService.getUserByUsername(username);
+
+            if (userId == null || refreshToken == null) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(null);
+            }
+
+            String accessToken = jwtService.generateToken(username);
+            JwtResponseDTO response = JwtResponseDTO.builder()
+                    .accessToken(accessToken)
+                    .token(refreshToken.getToken())
+                    .userId(userId)
+                    .build();
+
+            return ResponseEntity.ok(response);
+
+        } catch (BadCredentialsException ex) {
+            log.warn("Authentication failed for user: {}", authRequestDTO.getUsername());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        } catch (Exception ex) {
+            log.error("Error during authentication", ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-        return new ResponseEntity<>("Exception in User Service", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @PostMapping("auth/v1/refreshToken")
-    public JwtResponseDTO refreshToken(@RequestBody RefreshTokenRequestDTO refreshTokenRequestDTO) {
+    @PostMapping("/refreshToken")
+    public ResponseEntity<JwtResponseDTO> refreshToken(@RequestBody RefreshTokenRequestDTO refreshTokenRequestDTO) {
         return refreshTokenService.findByToken(refreshTokenRequestDTO.getToken())
                 .map(refreshTokenService::verifyExpiration)
                 .map(RefreshToken::getUserInfo)
                 .map(userInfo -> {
-                    String accessToken = jwtService.GenerateToken(userInfo.getUsername());
-                    return JwtResponseDTO.builder()
+                    String accessToken = jwtService.generateToken(userInfo.getUsername());
+                    JwtResponseDTO response = JwtResponseDTO.builder()
                             .accessToken(accessToken)
-                            .token(refreshTokenRequestDTO.getToken()).build();
-                }).orElseThrow(() -> new RuntimeException("Refresh Token is not in DB..!!"));
+                            .token(refreshTokenRequestDTO.getToken())
+                            .userId(userInfo.getUserId())
+                            .build();
+                    return ResponseEntity.ok(response);
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
-
 }

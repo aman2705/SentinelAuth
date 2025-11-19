@@ -6,63 +6,70 @@ import com.aman.authservice.response.JwtResponseDTO;
 import com.aman.authservice.service.JwtService;
 import com.aman.authservice.service.RefreshTokenService;
 import com.aman.authservice.service.UserDetailsServiceImpl;
+import com.aman.authservice.service.UserService;
 import lombok.AllArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Objects;
+import org.springframework.web.bind.annotation.*;
 
 @AllArgsConstructor
 @RestController
+@RequestMapping("/auth/v1")
 public class AuthController {
 
-    @Autowired
-    private JwtService jwtService;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
+    private final UserService userService;
+    private final UserDetailsServiceImpl userDetailsService;
 
-    @Autowired
-    private RefreshTokenService refreshTokenService;
-
-    @Autowired
-    private UserDetailsServiceImpl userDetailsService;
-
-    @PostMapping("auth/v1/signup")
-    public ResponseEntity SignUp(@RequestBody UserInfoDTO userInfoDto) {
+    @PostMapping("/signup")
+    public ResponseEntity<?> signup(@RequestBody UserInfoDTO userInfoDto) {
         try {
-            String userId = userDetailsService.signupUser(userInfoDto);
-            if (Objects.isNull(userId)) {
-                return new ResponseEntity<>("Already Exist", HttpStatus.BAD_REQUEST);
+            String userId = userService.signupUser(userInfoDto);   // FIXED: use UserService
+
+            if (userId == null) {
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body("User Already Exists");
             }
+
+            // Generate refresh + access token
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(userInfoDto.getUsername());
-            String jwtToken = jwtService.GenerateToken(userInfoDto.getUsername());
-            return new ResponseEntity<>(JwtResponseDTO.builder().accessToken(jwtToken).
-                    token(refreshToken.getToken()).userId(userId).build(), HttpStatus.OK);
+            String jwtToken = jwtService.generateToken(userInfoDto.getUsername());
+
+            return ResponseEntity.ok(
+                    JwtResponseDTO.builder()
+                            .accessToken(jwtToken)
+                            .token(refreshToken.getToken())
+                            .userId(userId)
+                            .build()
+            );
+
         } catch (Exception ex) {
-            return new ResponseEntity<>("Exception in User Service", HttpStatus.INTERNAL_SERVER_ERROR);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error during user signup");
         }
     }
 
-    @GetMapping("/auth/v1/ping")
-    public ResponseEntity<String> ping() {
+    @GetMapping("/ping")
+    public ResponseEntity<?> ping() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
         if (authentication != null && authentication.isAuthenticated()) {
-            String userId = userDetailsService.getUserByUsername(authentication.getName());
-            if (Objects.nonNull(userId)) {
+            String userId = userService.getUserIdByUsername(authentication.getName());
+
+            if (userId != null) {
                 return ResponseEntity.ok(userId);
             }
         }
+
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
     }
 
     @GetMapping("/health")
     public ResponseEntity<Boolean> checkHealth() {
-        return new ResponseEntity<>(true, HttpStatus.OK);
+        return ResponseEntity.ok(true);
     }
-
 }

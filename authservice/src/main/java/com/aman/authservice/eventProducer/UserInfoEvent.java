@@ -15,12 +15,8 @@ import lombok.Setter;
 public class UserInfoEvent
 {
     private String firstName;
-
     private String lastName;
-
     private String email;
-
     private Long phoneNumber;
-
     private String userId;
 }

@@ -8,12 +8,12 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@Table(name = "users")
 @Getter
 @Setter
-@ToString
-@AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "users")
+@AllArgsConstructor
+@Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class UserInfo {
 
@@ -21,9 +21,22 @@ public class UserInfo {
     @Column(name = "user_id")
     private String userId;
 
+    @Column(unique = true)
     private String username;
 
     private String password;
+
+    @Column(name = "first_name")
+    private String firstName;
+
+    @Column(name = "last_name")
+    private String lastName;
+
+    @Column(unique = true)
+    private String email;
+
+    @Column(name = "phone_number")
+    private Long phoneNumber;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -31,7 +44,6 @@ public class UserInfo {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
-
+    @Builder.Default
     private Set<UserRole> roles = new HashSet<>();
-
 }
