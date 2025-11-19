@@ -53,6 +53,7 @@ public class UserService {
         return UserInfo.builder()
                 .userId(UUID.randomUUID().toString())
                 .firstName(dto.getFirstName())
+                .phoneNumber(dto.getPhoneNumber())
                 .lastName(dto.getLastName())
                 .email(dto.getEmail())
                 .username(dto.getUsername())
