@@ -1,4 +1,7 @@
-FROM eclipse-temurin:17-jdk-alpine
+# Use non-Alpine image for better Kafka compression library compatibility
+# Alpine uses musl libc which doesn't support Snappy compression (requires glibc)
+# Alternatively, you can use Alpine and disable Snappy compression (use gzip instead)
+FROM eclipse-temurin:17-jdk
 WORKDIR /app
 
 # Install curl for health checks

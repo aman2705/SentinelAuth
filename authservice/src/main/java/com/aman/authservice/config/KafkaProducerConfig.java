@@ -42,8 +42,8 @@ public class KafkaProducerConfig {
     @Value("${spring.kafka.producer.enable-idempotence:true}")
     private Boolean enableIdempotence;
 
-    @Value("${spring.kafka.producer.compression-type:snappy}")
-    private String compressionType;
+    @Value("${spring.kafka.producer.compression-type:gzip}")
+    private String compressionType;  // Default to gzip for Alpine Linux compatibility
 
     /**
      * Creates producer factory with production-ready settings.
@@ -70,8 +70,8 @@ public class KafkaProducerConfig {
         props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
         props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
         
-        // Performance
-        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType); // Snappy compression
+        // Performance - Using gzip for Alpine Linux compatibility (snappy requires glibc)
+        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType); // Compression: gzip, lz4, or none
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384); // 16KB batch size
         props.put(ProducerConfig.LINGER_MS_CONFIG, 10); // Wait up to 10ms to batch
         

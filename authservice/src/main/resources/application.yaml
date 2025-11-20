@@ -33,7 +33,7 @@ spring:
       request-timeout-ms: ${KAFKA_PRODUCER_REQUEST_TIMEOUT_MS:30000}
       delivery-timeout-ms: ${KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS:120000}
       enable-idempotence: ${KAFKA_PRODUCER_ENABLE_IDEMPOTENCE:true}
-      compression-type: ${KAFKA_PRODUCER_COMPRESSION_TYPE:snappy}
+      compression-type: ${KAFKA_PRODUCER_COMPRESSION_TYPE:gzip}  # Using gzip instead of snappy for Alpine Linux compatibility
 
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: com.aman.authservice.serializer.UserEventSerializer
