@@ -62,10 +62,7 @@ public class SecurityConfig {
                 .cors(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/auth/v1/login",
-                                "/auth/v1/signup",
-                                "/auth/v1/refreshToken",
-                                "/health"
+                                "/auth/v1/**", "/health"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

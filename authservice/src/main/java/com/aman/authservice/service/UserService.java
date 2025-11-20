@@ -1,9 +1,11 @@
 package com.aman.authservice.service;
 
+import com.aman.authservice.dto.ChangePasswordDTO;
+import com.aman.authservice.dto.UserInfoDTO;
 import com.aman.authservice.entities.UserInfo;
-import com.aman.authservice.eventProducer.UserInfoEvent;
-import com.aman.authservice.eventProducer.UserInfoProducer;
-import com.aman.authservice.model.UserInfoDTO;
+import com.aman.authservice.eventProducer.UserEventProducer;
+import com.aman.authservice.events.UserInfoEvent;
+import com.aman.authservice.events.UserPasswordChangedEvent;
 import com.aman.authservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +22,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final UserInfoProducer userInfoProducer;
+    private final UserEventProducer userEventProducer;
 
     public String signupUser(UserInfoDTO userInfoDto) {
         // Validate if user exists by email
@@ -63,7 +65,7 @@ public class UserService {
     }
 
     private void publishSignupEvent(UserInfo user) {
-        userInfoProducer.sendEventToKafka(
+        userEventProducer.publish(
                 UserInfoEvent.builder()
                         .userId(user.getUserId())
                         .firstName(user.getFirstName())
@@ -71,7 +73,8 @@ public class UserService {
                         .email(user.getEmail())
                         .username(user.getUsername())
                         .phoneNumber(user.getPhoneNumber())
-                        .build()
+                        .build(),
+                user.getUserId()
         );
     }
 
@@ -79,5 +82,25 @@ public class UserService {
         return userRepository.findByUsername(username)
                 .map(UserInfo::getUserId)
                 .orElse(null);
+    }
+
+    public void changePassword(String userId, ChangePasswordDTO request) {
+
+        UserInfo user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new RuntimeException("Old password does not match");
+        }
+
+        String encodedNewPassword = passwordEncoder.encode(request.getNewPassword());
+        user.setPassword(encodedNewPassword);
+        userRepository.save(user);
+
+        // Publish Kafka event
+        UserPasswordChangedEvent event = new UserPasswordChangedEvent(userId);
+        userEventProducer.publish(event, userId);
+
+        log.info("Password changed successfully for userId: {}", userId);
     }
 }

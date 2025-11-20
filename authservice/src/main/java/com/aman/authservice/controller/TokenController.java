@@ -1,6 +1,7 @@
 package com.aman.authservice.controller;
 
 import com.aman.authservice.entities.RefreshToken;
+import com.aman.authservice.eventProducer.UserEventProducer;
 import com.aman.authservice.request.AuthRequestDTO;
 import com.aman.authservice.request.RefreshTokenRequestDTO;
 import com.aman.authservice.response.JwtResponseDTO;
@@ -30,6 +31,7 @@ public class TokenController {
     private final RefreshTokenService refreshTokenService;
     private final UserDetailsServiceImpl userDetailsService;
     private final JwtService jwtService;
+    private final UserEventProducer userEventProducer;
 
     @PostMapping("/login")
     public ResponseEntity<JwtResponseDTO> login(@RequestBody AuthRequestDTO authRequestDTO) {
@@ -39,16 +41,20 @@ public class TokenController {
             );
 
             if (!authentication.isAuthenticated()) {
+                // publish failed login by username
+                userEventProducer.publish(
+                        new com.aman.authservice.events.UserLoginFailedEvent(authRequestDTO.getUsername(), "Invalid credentials"),
+                        authRequestDTO.getUsername()
+                );
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
 
             String username = authRequestDTO.getUsername();
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(username);
-            String userId = userDetailsService.getUserByUsername(username);
+            String userId = userDetailsService.getUserByUsername(username); // your method
 
             if (userId == null || refreshToken == null) {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(null);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
             }
 
             String accessToken = jwtService.generateToken(username);
@@ -58,9 +64,19 @@ public class TokenController {
                     .userId(userId)
                     .build();
 
+            // publish login success
+            // Optionally capture IP/userAgent from request; below is basic example
+            String ip = "";
+            String ua = "";
+            userEventProducer.publish(new com.aman.authservice.events.UserLoggedInEvent(userId, ip, ua), userId);
+
             return ResponseEntity.ok(response);
 
         } catch (BadCredentialsException ex) {
+            userEventProducer.publish(
+                    new com.aman.authservice.events.UserLoginFailedEvent(authRequestDTO.getUsername(), "Bad credentials"),
+                    authRequestDTO.getUsername()
+            );
             log.warn("Authentication failed for user: {}", authRequestDTO.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         } catch (Exception ex) {
@@ -68,6 +84,7 @@ public class TokenController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+
 
     @PostMapping("/refreshToken")
     public ResponseEntity<JwtResponseDTO> refreshToken(@RequestBody RefreshTokenRequestDTO refreshTokenRequestDTO) {
@@ -81,8 +98,13 @@ public class TokenController {
                             .token(refreshTokenRequestDTO.getToken())
                             .userId(userInfo.getUserId())
                             .build();
+
+                    // Publish token refresh event
+                    userEventProducer.publish(new com.aman.authservice.events.TokenRefreshedEvent(userInfo.getUserId()), userInfo.getUserId());
+
                     return ResponseEntity.ok(response);
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
     }
+
 }

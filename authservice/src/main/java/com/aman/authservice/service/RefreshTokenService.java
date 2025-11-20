@@ -24,44 +24,43 @@ public class RefreshTokenService {
     private static final long REFRESH_TOKEN_DURATION_MS = 6_000_000L; // 100 minutes
 
     /**
-     * Creates and persists a new refresh token for the given username.
-     *
-     * @param username the username for which the refresh token is generated
-     * @return the saved RefreshToken
-     * @throws UsernameNotFoundException if the user is not found
+     * Create or update refresh token for a user.
      */
     public RefreshToken createRefreshToken(String username) {
+
         UserInfo user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
-        RefreshToken refreshToken = RefreshToken.builder()
-                .userInfo(user)
-                .token(UUID.randomUUID().toString())
-                .expiryDate(Instant.now().plusMillis(REFRESH_TOKEN_DURATION_MS))
-                .build();
+        // Check if refresh token exists for user
+        Optional<RefreshToken> existingToken = refreshTokenRepository.findByUserInfo(user);
 
-        log.info("Creating refresh token for user: {}", username);
+        RefreshToken refreshToken;
+
+        if (existingToken.isPresent()) {
+            // UPDATE existing token
+            refreshToken = existingToken.get();
+            refreshToken.setToken(UUID.randomUUID().toString());
+            refreshToken.setExpiryDate(Instant.now().plusMillis(REFRESH_TOKEN_DURATION_MS));
+
+            log.info("Updating existing refresh token for user: {}", username);
+        } else {
+            // CREATE new token (first login)
+            refreshToken = RefreshToken.builder()
+                    .userInfo(user)
+                    .token(UUID.randomUUID().toString())
+                    .expiryDate(Instant.now().plusMillis(REFRESH_TOKEN_DURATION_MS))
+                    .build();
+
+            log.info("Creating new refresh token for user: {}", username);
+        }
+
         return refreshTokenRepository.save(refreshToken);
     }
 
-    /**
-     * Retrieves a refresh token by its token string.
-     *
-     * @param token the refresh token string
-     * @return an Optional containing the RefreshToken if found
-     */
     public Optional<RefreshToken> findByToken(String token) {
         return refreshTokenRepository.findByToken(token);
     }
 
-    /**
-     * Verifies that the refresh token has not expired.
-     * If expired, deletes the token and throws an exception.
-     *
-     * @param token the RefreshToken to verify
-     * @return the token if valid
-     * @throws RuntimeException if the token is expired
-     */
     public RefreshToken verifyExpiration(RefreshToken token) {
         if (token.getExpiryDate().isBefore(Instant.now())) {
             refreshTokenRepository.delete(token);
