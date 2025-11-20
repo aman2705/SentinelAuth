@@ -4,7 +4,7 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${MYSQL_DB:authservice}?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:authservice}?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:password}
     hikari:
@@ -24,6 +24,11 @@ spring:
     producer:
       # Works in Docker + locally
       bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      retries: ${KAFKA_PRODUCER_RETRIES:3}
+      request-timeout-ms: ${KAFKA_PRODUCER_REQUEST_TIMEOUT_MS:30000}
+      delivery-timeout-ms: ${KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS:120000}
+      enable-idempotence: ${KAFKA_PRODUCER_ENABLE_IDEMPOTENCE:true}
+      compression-type: ${KAFKA_PRODUCER_COMPRESSION_TYPE:snappy}
 
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: com.aman.authservice.serializer.UserEventSerializer
@@ -32,13 +37,9 @@ spring:
         spring.json.type.mapping: >
           userInfoEvent:authservice.events.UserInfoEvent,
           userEvent:authservice.events.UserEvent
-        # Reliable delivery settings
-        acks: all
-        retries: 3
-        max.in.flight.requests.per.connection: 1
 
     topic-json:
-      name: user_service
+      name: ${KAFKA_TOPIC_NAME:user_service}  # CRITICAL: Must match consumer topic
 
 server:
   port: 9898

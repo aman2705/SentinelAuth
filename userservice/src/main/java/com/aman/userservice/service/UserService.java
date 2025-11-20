@@ -8,10 +8,19 @@ import com.aman.userservice.repository.EventLogRepository;
 import com.aman.userservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.NoSuchElementException;
 
+/**
+ * Production-ready user service with:
+ * - Transaction management
+ * - Error handling
+ * - Structured logging
+ * - Idempotency support
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -21,50 +30,107 @@ public class UserService {
     private final EventLogRepository eventLogRepository;
 
     /**
-     * -------------------------
-     * SIGNUP EVENT HANDLING
-     * -------------------------
-     * Signup sends full UserInfoDTO
-     * → Save/Update user in database
+     * Handles user signup event.
+     * Creates or updates user in database.
+     *
+     * @param dto User information DTO from signup event
+     * @return Processed user DTO
+     * @throws IllegalArgumentException if DTO is invalid
      */
+    @Transactional
     public UserInfoDTO handleSignup(UserInfoDTO dto) {
+        if (dto == null) {
+            throw new IllegalArgumentException("UserInfoDTO cannot be null");
+        }
 
-        log.info("Processing signup for userId: {}", dto.getUserId());
+        if (dto.getUserId() == null || dto.getUserId().trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
 
-        UserInfo user = userRepository.findByUserId(dto.getUserId())
-                .map(existing -> {
-                    log.info("Updating existing user {}", existing.getUserId());
-                    return userRepository.save(dto.transformToUserInfo());
-                })
-                .orElseGet(() -> {
-                    log.info("Creating new user {}", dto.getUserId());
-                    return userRepository.save(dto.transformToUserInfo());
-                });
+        String userId = dto.getUserId().trim();
+        log.info("Processing signup event | userId={} | email={} | username={}",
+                userId, dto.getEmail(), dto.getUsername());
 
-        return mapToDTO(user);
+        try {
+            UserInfo user = userRepository.findByUserId(userId)
+                    .map(existing -> {
+                        log.info("Updating existing user | userId={} | email={}",
+                                existing.getUserId(), existing.getEmail());
+                        UserInfo updated = dto.transformToUserInfo();
+                        updated.setId(existing.getId()); // Preserve existing ID
+                        return userRepository.save(updated);
+                    })
+                    .orElseGet(() -> {
+                        log.info("Creating new user | userId={} | email={} | username={}",
+                                userId, dto.getEmail(), dto.getUsername());
+                        return userRepository.save(dto.transformToUserInfo());
+                    });
+
+            log.info("User signup processed successfully | userId={} | email={} | username={}",
+                    user.getUserId(), user.getEmail(), user.getUsername());
+
+            return mapToDTO(user);
+        } catch (DataIntegrityViolationException e) {
+            log.error("Data integrity violation during signup | userId={} | error={}",
+                    userId, e.getMessage(), e);
+            // Try to fetch existing user if duplicate key error
+            return userRepository.findByUserId(userId)
+                    .map(this::mapToDTO)
+                    .orElseThrow(() -> new RuntimeException("Failed to process signup: " + e.getMessage(), e));
+        } catch (Exception e) {
+            log.error("Failed to process signup | userId={} | error={}",
+                    userId, e.getMessage(), e);
+            throw new RuntimeException("Failed to process signup: " + e.getMessage(), e);
+        }
     }
 
-
     /**
-     * -------------------------
-     * AUTH EVENTS HANDLING
-     * -------------------------
-     * Login, Logout, Refresh, Password Change
-     * → Only log in auth_events table
+     * Handles authentication events (login, logout, token refresh, password change).
+     * Logs event in auth_events table for audit trail.
+     *
+     * @param event User event to process
+     * @throws IllegalArgumentException if event is invalid
      */
+    @Transactional
     public void handleAuthEvent(UserEvent event) {
+        if (event == null) {
+            throw new IllegalArgumentException("UserEvent cannot be null");
+        }
 
-        log.info("Saving auth event: {} for userId={}", event.getEventType(), event.getUserId());
+        if (event.getUserId() == null || event.getUserId().trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty in event");
+        }
 
-        EventLog eventLog = EventLog.from(event);
-        eventLogRepository.save(eventLog);
+        String userId = event.getUserId().trim();
+        String eventType = event.getEventType();
+
+        log.info("Processing auth event | userId={} | eventType={} | timestamp={}",
+                userId, eventType, event.getEventTimestamp());
+
+        try {
+            EventLog eventLog = EventLog.from(event);
+            eventLogRepository.save(eventLog);
+
+            log.info("Auth event processed successfully | userId={} | eventType={} | timestamp={}",
+                    userId, eventType, event.getEventTimestamp());
+        } catch (Exception e) {
+            log.error("Failed to process auth event | userId={} | eventType={} | error={}",
+                    userId, eventType, e.getMessage(), e);
+            throw new RuntimeException("Failed to process auth event: " + e.getMessage(), e);
+        }
     }
 
-
     /**
-     * Convert UserInfo → DTO
+     * Converts UserInfo entity to DTO.
+     *
+     * @param userInfo UserInfo entity
+     * @return UserInfoDTO
      */
     private UserInfoDTO mapToDTO(UserInfo userInfo) {
+        if (userInfo == null) {
+            return null;
+        }
+
         return new UserInfoDTO(
                 userInfo.getUserId(),
                 userInfo.getUsername(),
@@ -76,15 +142,25 @@ public class UserService {
         );
     }
 
-
     /**
-     * Fetch user by username
+     * Fetches user by username.
+     *
+     * @param username Username to search for
+     * @return UserInfoDTO
+     * @throws NoSuchElementException if user not found
      */
     public UserInfoDTO getUserByUsername(String username) {
-        return userRepository.findByUsername(username)
-                .map(userInfo -> mapToDTO(userInfo))
-                .orElseThrow(() -> new NoSuchElementException(
-                        "User not found with username: " + username
-                ));
+        if (username == null || username.trim().isEmpty()) {
+            throw new IllegalArgumentException("Username cannot be null or empty");
+        }
+
+        log.debug("Fetching user by username | username={}", username);
+
+        return userRepository.findByUsername(username.trim())
+                .map(this::mapToDTO)
+                .orElseThrow(() -> {
+                    log.warn("User not found | username={}", username);
+                    return new NoSuchElementException("User not found with username: " + username);
+                });
     }
 }

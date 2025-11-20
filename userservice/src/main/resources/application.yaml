@@ -3,27 +3,30 @@ spring:
     name: userservice
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
     consumer:
-      group-id: userinfo-consumer-group
-      auto-offset-reset: earliest
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:user-service}
+      auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
+      enable-auto-commit: false  # Manual acknowledgment for exactly-once processing
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: com.aman.userservice.deserializer.UserEventUnifiedDeserializer
+      max-poll-records: 10
+      max-poll-interval-ms: 300000
+      session-timeout-ms: 45000
+      heartbeat-interval-ms: 3000
       properties:
-        max.poll.interval.ms: 300000
-        session.timeout.ms: 45000
         spring.json.trusted.packages: "*"
         spring.json.type.mapping: auth:com.aman.userservice.entities.UserInfoDTO
 
     topic-json:
-      name: user_service
+      name: ${KAFKA_TOPIC_NAME:user_service}  # CRITICAL: Must match producer topic
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/userservice?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
-    username: root
-    password: password
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:userservice}?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:password}
 
     hikari:
       maximum-pool-size: 20
@@ -46,3 +49,11 @@ logging:
     org.springframework.security: DEBUG
     org.apache.kafka: DEBUG
     org.springframework.kafka: DEBUG
+    com.aman.userservice: INFO
+
+# Application-specific configuration
+app:
+  kafka:
+    dlq:
+      enabled: ${KAFKA_DLQ_ENABLED:true}
+      topic-suffix: ${KAFKA_DLQ_TOPIC_SUFFIX:-dlq}
