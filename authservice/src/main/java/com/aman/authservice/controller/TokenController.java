@@ -1,6 +1,7 @@
 package com.aman.authservice.controller;
 
 import com.aman.authservice.entities.RefreshToken;
+import com.aman.authservice.entities.UserInfo;
 import com.aman.authservice.eventProducer.UserEventProducer;
 import com.aman.authservice.events.TokenRefreshedEvent;
 import com.aman.authservice.events.UserLoggedInEvent;
@@ -27,6 +28,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Optional;
 
 /**
  * REST controller for token-related operations.
@@ -153,61 +156,60 @@ public class TokenController {
     public ResponseEntity<JwtResponseDTO> refreshToken(
             @Valid @RequestBody RefreshTokenRequestDTO refreshTokenRequestDTO,
             HttpServletRequest request) {
+
         String token = refreshTokenRequestDTO.getToken();
         log.debug("Token refresh request received");
 
         try {
-            return refreshTokenService.findByToken(token)
-                    .map(refreshToken -> {
-                        try {
-                            refreshToken = refreshTokenService.verifyExpiration(refreshToken);
-                        } catch (TokenValidationException e) {
-                            log.warn("Token validation failed during refresh: {}", e.getMessage());
-                            return null;
-                        }
-                        return refreshToken;
-                    })
-                    .map(RefreshToken::getUserInfo)
-                    .map(userInfo -> {
-                        try {
-                            String accessToken = jwtService.generateToken(userInfo.getUsername());
-                            JwtResponseDTO response = JwtResponseDTO.builder()
-                                    .accessToken(accessToken)
-                                    .token(token) // Return the same refresh token
-                                    .userId(userInfo.getUserId())
-                                    .build();
+            Optional<RefreshToken> optionalRefreshToken = refreshTokenService.findByToken(token);
 
-                            // Publish token refresh event
-                            try {
-                                userEventProducer.publish(
-                                        new TokenRefreshedEvent(userInfo.getUserId()),
-                                        userInfo.getUserId()
-                                );
-                                log.debug("Token refreshed event published for user: {}", userInfo.getUserId());
-                            } catch (Exception e) {
-                                log.error("Failed to publish token refresh event for user: {}", 
-                                    userInfo.getUserId(), e);
-                                // Non-critical error - token is refreshed, just log the event failure
-                            }
+            if (optionalRefreshToken.isEmpty()) {
+                log.warn("Refresh token not found or invalid");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
 
-                            log.info("Token refreshed successfully for user: {} (userId: {})",
-                                    userInfo.getUsername(), userInfo.getUserId());
-                            return ResponseEntity.ok(response);
-                        } catch (Exception e) {
-                            log.error("Failed to generate access token during refresh for user: {}",
-                                    userInfo.getUsername(), e);
-                            return ResponseEntity.<JwtResponseDTO>status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-                        }
-                    })
-                    .orElseGet(() -> {
-                        log.warn("Refresh token not found or invalid");
-                        return ResponseEntity.<JwtResponseDTO>status(HttpStatus.UNAUTHORIZED).build();
-                    });
+            RefreshToken refreshToken;
+
+            try {
+                refreshToken = refreshTokenService.verifyExpiration(optionalRefreshToken.get());
+            } catch (TokenValidationException e) {
+                log.warn("Token validation failed during refresh: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+
+            UserInfo userInfo = refreshToken.getUserInfo();
+
+            // Generate new access token
+            String accessToken = jwtService.generateToken(userInfo.getUsername());
+
+            JwtResponseDTO response = JwtResponseDTO.builder()
+                    .accessToken(accessToken)
+                    .token(token)  // returning the SAME refresh token
+                    .userId(userInfo.getUserId())
+                    .build();
+
+            // Publish event (non-critical)
+            try {
+                userEventProducer.publish(
+                        new TokenRefreshedEvent(userInfo.getUserId()),
+                        userInfo.getUserId()
+                );
+                log.debug("Token refreshed event published for user: {}", userInfo.getUserId());
+            } catch (Exception e) {
+                log.error("Failed to publish token refresh event for user: {}", userInfo.getUserId(), e);
+            }
+
+            log.info("Token refreshed successfully for user: {} (userId: {})",
+                    userInfo.getUsername(), userInfo.getUserId());
+
+            return ResponseEntity.ok(response);
+
         } catch (Exception ex) {
             log.error("Unexpected error during token refresh", ex);
-            return ResponseEntity.<JwtResponseDTO>status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+
 
     /**
      * Extracts client IP address from request, handling proxy headers.
