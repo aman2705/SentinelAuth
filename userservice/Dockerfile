@@ -1,6 +1,6 @@
 # Use non-Alpine image for better Kafka library compatibility
 # Alpine uses musl libc which can cause issues with some native libraries
-FROM eclipse-temurin:17-jdk
+FROM eclipse-temurin:17-jdk-alpine
 
 WORKDIR /app
 
