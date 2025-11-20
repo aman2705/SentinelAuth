@@ -3,11 +3,12 @@ package com.aman.authservice.controller;
 import com.aman.authservice.dto.ChangePasswordDTO;
 import com.aman.authservice.dto.UserInfoDTO;
 import com.aman.authservice.entities.RefreshToken;
+import com.aman.authservice.ratelimit.annotation.RateLimiter;
+import com.aman.authservice.ratelimit.model.RateLimitKeyStrategy;
 import com.aman.authservice.response.JwtResponseDTO;
 import com.aman.authservice.service.JwtService;
 import com.aman.authservice.service.RefreshTokenService;
 import com.aman.authservice.service.UserService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,13 +40,16 @@ public class AuthController {
      * Registers a new user and returns access and refresh tokens.
      *
      * @param userInfoDto User information DTO (validated)
-     * @param request HTTP servlet request
      * @return JWT response with access token, refresh token, and user ID
      */
-    @PostMapping("/signup")
+    @RateLimiter(
+            name = "register-rate-limiter",
+            fixedWindowKey = RateLimitKeyStrategy.IP,
+            slidingWindowKey = RateLimitKeyStrategy.IP_USERNAME_TENANT
+    )
+    @PostMapping({"/signup", "/register"})
     public ResponseEntity<JwtResponseDTO> signup(
-            @Valid @RequestBody UserInfoDTO userInfoDto,
-            HttpServletRequest request) {
+            @Valid @RequestBody UserInfoDTO userInfoDto) {
         log.info("Signup request received for email: {}", userInfoDto.getEmail());
 
         String userId = userService.signupUser(userInfoDto);

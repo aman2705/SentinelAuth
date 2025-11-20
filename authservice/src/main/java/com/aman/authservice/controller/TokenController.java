@@ -8,12 +8,16 @@ import com.aman.authservice.events.UserLoggedInEvent;
 import com.aman.authservice.events.UserLoginFailedEvent;
 import com.aman.authservice.exception.TokenValidationException;
 import com.aman.authservice.exception.UserNotFoundException;
+import com.aman.authservice.ratelimit.annotation.RateLimiter;
+import com.aman.authservice.ratelimit.model.RateLimitKeyStrategy;
+import com.aman.authservice.ratelimit.service.BruteForceProtectionService;
 import com.aman.authservice.request.AuthRequestDTO;
 import com.aman.authservice.request.RefreshTokenRequestDTO;
 import com.aman.authservice.response.JwtResponseDTO;
 import com.aman.authservice.service.JwtService;
 import com.aman.authservice.service.RefreshTokenService;
 import com.aman.authservice.service.UserDetailsServiceImpl;
+import com.aman.authservice.util.ClientRequestMetadataExtractor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +50,8 @@ public class TokenController {
     private final UserDetailsServiceImpl userDetailsService;
     private final JwtService jwtService;
     private final UserEventProducer userEventProducer;
+    private final BruteForceProtectionService bruteForceProtectionService;
+    private final ClientRequestMetadataExtractor metadataExtractor;
 
     /**
      * Authenticates a user and returns access and refresh tokens.
@@ -55,12 +61,20 @@ public class TokenController {
      * @param request HTTP servlet request for extracting IP and User-Agent
      * @return JWT response with access token, refresh token, and user ID
      */
+    @RateLimiter(
+            name = "login-rate-limiter",
+            fixedWindowKey = RateLimitKeyStrategy.IP,
+            slidingWindowKey = RateLimitKeyStrategy.IP_USERNAME
+    )
     @PostMapping("/login")
     public ResponseEntity<JwtResponseDTO> login(
             @Valid @RequestBody AuthRequestDTO authRequestDTO,
             HttpServletRequest request) {
         String username = authRequestDTO.getUsername();
         log.info("Login attempt for user: {}", username);
+
+        String ipAddress = metadataExtractor.extractClientIp(request);
+        bruteForceProtectionService.ensureAllowed(ipAddress, username);
 
         try {
             // Authenticate user
@@ -73,6 +87,7 @@ public class TokenController {
 
             if (!authentication.isAuthenticated()) {
                 log.warn("Authentication failed for user: {} - not authenticated", username);
+                bruteForceProtectionService.recordFailure(ipAddress, username);
                 publishLoginFailedEvent(username, "Invalid credentials");
                 return ResponseEntity.<JwtResponseDTO>status(HttpStatus.UNAUTHORIZED).build();
             }
@@ -112,7 +127,6 @@ public class TokenController {
                     .build();
 
             // Extract IP and User-Agent for logging
-            String ipAddress = extractClientIpAddress(request);
             String userAgent = extractUserAgent(request);
 
             // Publish login success event
@@ -128,14 +142,17 @@ public class TokenController {
             }
 
             log.info("Login successful for user: {} (userId: {})", username, userId);
+            bruteForceProtectionService.reset(ipAddress, username);
             return ResponseEntity.ok(response);
 
         } catch (BadCredentialsException ex) {
             log.warn("Bad credentials for user: {}", username);
+            bruteForceProtectionService.recordFailure(ipAddress, username);
             publishLoginFailedEvent(username, "Bad credentials");
             return ResponseEntity.<JwtResponseDTO>status(HttpStatus.UNAUTHORIZED).build();
         } catch (UserNotFoundException ex) {
             log.warn("User not found: {}", username);
+            bruteForceProtectionService.recordFailure(ipAddress, username);
             publishLoginFailedEvent(username, "User not found");
             return ResponseEntity.<JwtResponseDTO>status(HttpStatus.UNAUTHORIZED).build();
         } catch (Exception ex) {
@@ -152,7 +169,12 @@ public class TokenController {
      * @param request HTTP servlet request
      * @return JWT response with new access token
      */
-    @PostMapping("/refreshToken")
+    @RateLimiter(
+            name = "token-rate-limiter",
+            fixedWindowKey = RateLimitKeyStrategy.IP,
+            slidingWindowKey = RateLimitKeyStrategy.IP_USERNAME
+    )
+    @PostMapping({"/refreshToken", "/token"})
     public ResponseEntity<JwtResponseDTO> refreshToken(
             @Valid @RequestBody RefreshTokenRequestDTO refreshTokenRequestDTO,
             HttpServletRequest request) {
@@ -217,35 +239,6 @@ public class TokenController {
      * @param request HTTP servlet request
      * @return Client IP address
      */
-    private String extractClientIpAddress(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("X-Real-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("WL-Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("HTTP_CLIENT_IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("HTTP_X_FORWARDED_FOR");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-
-        // Handle multiple IPs (comma-separated)
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-
-        return ip != null ? ip : "unknown";
-    }
-
     /**
      * Extracts User-Agent from request.
      *
