@@ -37,9 +37,17 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     /**
      * Fetches userId for a given username.
      * Returns null if the user does not exist.
+     *
+     * @param username Username to search for
+     * @return User ID if found, null otherwise
      */
     public String getUserByUsername(String username) {
-        return userRepository.findByUsername(username)
+        if (username == null || username.trim().isEmpty()) {
+            log.debug("Empty username provided for getUserByUsername");
+            return null;
+        }
+        
+        return userRepository.findByUsername(username.trim())
                 .map(UserInfo::getUserId)
                 .orElse(null);
     }
