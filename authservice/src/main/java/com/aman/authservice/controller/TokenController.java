@@ -71,7 +71,7 @@ public class TokenController {
             if (!authentication.isAuthenticated()) {
                 log.warn("Authentication failed for user: {} - not authenticated", username);
                 publishLoginFailedEvent(username, "Invalid credentials");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+                return ResponseEntity.<JwtResponseDTO>status(HttpStatus.UNAUTHORIZED).build();
             }
 
             // Get user ID
@@ -79,7 +79,7 @@ public class TokenController {
             if (userId == null) {
                 log.error("User ID not found for authenticated user: {}", username);
                 publishLoginFailedEvent(username, "User ID not found");
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+                return ResponseEntity.<JwtResponseDTO>status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             }
 
             // Create refresh token
@@ -89,13 +89,13 @@ public class TokenController {
             } catch (Exception e) {
                 log.error("Failed to create refresh token for user: {}", username, e);
                 publishLoginFailedEvent(username, "Failed to create refresh token");
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+                return ResponseEntity.<JwtResponseDTO>status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             }
 
             if (refreshToken == null) {
                 log.error("Refresh token is null for user: {}", username);
                 publishLoginFailedEvent(username, "Refresh token creation failed");
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+                return ResponseEntity.<JwtResponseDTO>status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             }
 
             // Generate access token
@@ -130,15 +130,15 @@ public class TokenController {
         } catch (BadCredentialsException ex) {
             log.warn("Bad credentials for user: {}", username);
             publishLoginFailedEvent(username, "Bad credentials");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.<JwtResponseDTO>status(HttpStatus.UNAUTHORIZED).build();
         } catch (UserNotFoundException ex) {
             log.warn("User not found: {}", username);
             publishLoginFailedEvent(username, "User not found");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.<JwtResponseDTO>status(HttpStatus.UNAUTHORIZED).build();
         } catch (Exception ex) {
             log.error("Unexpected error during authentication for user: {}", username, ex);
             publishLoginFailedEvent(username, "Internal server error");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.<JwtResponseDTO>status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -205,7 +205,7 @@ public class TokenController {
                     });
         } catch (Exception ex) {
             log.error("Unexpected error during token refresh", ex);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.<JwtResponseDTO>status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
