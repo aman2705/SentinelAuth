@@ -4,9 +4,9 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/authservice?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
-    username: root
-    password: password
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3307}/${MYSQL_DB:authservice}?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:password}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 10
@@ -22,7 +22,7 @@ spring:
 
   kafka:
     producer:
-      bootstrap-servers: localhost:9092
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092,host.docker.internal:9092}
       producer:
         acks: all
         retries: 3
