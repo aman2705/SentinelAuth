@@ -18,7 +18,7 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   mysql:
@@ -28,7 +28,7 @@ services:
       - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: authservice
+      MYSQL_DATABASE: authservice,userservice
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -54,7 +54,7 @@ services:
       MYSQL_DB: authservice
       MYSQL_USER: root
       MYSQL_PASSWORD: password
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
   userservice:
     build:
@@ -67,12 +67,12 @@ services:
     ports:
       - "9810:9810"
     environment:
-      MYSQL_HOST: mysql
-      MYSQL_PORT: 3306
+      MYSQL_HOST: mysql         
+      MYSQL_PORT: 3306         
       MYSQL_DB: userservice
       MYSQL_USER: root
       MYSQL_PASSWORD: password
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
 volumes:
   mysql_data:
