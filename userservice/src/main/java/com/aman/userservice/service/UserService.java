@@ -1,7 +1,10 @@
 package com.aman.userservice.service;
 
+import com.aman.userservice.domain.EventLog;
 import com.aman.userservice.domain.UserInfo;
 import com.aman.userservice.domain.UserInfoDTO;
+import com.aman.userservice.events.UserEvent;
+import com.aman.userservice.repository.EventLogRepository;
 import com.aman.userservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,21 +18,52 @@ import java.util.NoSuchElementException;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final EventLogRepository eventLogRepository;
 
-    public UserInfoDTO createOrUpdateUser(UserInfoDTO userInfoDto) {
-        UserInfo userInfo = userRepository.findByUserId(userInfoDto.getUserId())
-                .map(existingUser -> {
-                    log.info("Updating existing user: {}", existingUser.getUserId());
-                    return userRepository.save(userInfoDto.transformToUserInfo());
+    /**
+     * -------------------------
+     * SIGNUP EVENT HANDLING
+     * -------------------------
+     * Signup sends full UserInfoDTO
+     * → Save/Update user in database
+     */
+    public UserInfoDTO handleSignup(UserInfoDTO dto) {
+
+        log.info("Processing signup for userId: {}", dto.getUserId());
+
+        UserInfo user = userRepository.findByUserId(dto.getUserId())
+                .map(existing -> {
+                    log.info("Updating existing user {}", existing.getUserId());
+                    return userRepository.save(dto.transformToUserInfo());
                 })
                 .orElseGet(() -> {
-                    log.info("Creating new user with email: {}", userInfoDto.getEmail());
-                    return userRepository.save(userInfoDto.transformToUserInfo());
+                    log.info("Creating new user {}", dto.getUserId());
+                    return userRepository.save(dto.transformToUserInfo());
                 });
 
-        return mapToDTO(userInfo);
+        return mapToDTO(user);
     }
 
+
+    /**
+     * -------------------------
+     * AUTH EVENTS HANDLING
+     * -------------------------
+     * Login, Logout, Refresh, Password Change
+     * → Only log in auth_events table
+     */
+    public void handleAuthEvent(UserEvent event) {
+
+        log.info("Saving auth event: {} for userId={}", event.getEventType(), event.getUserId());
+
+        EventLog eventLog = EventLog.from(event);
+        eventLogRepository.save(eventLog);
+    }
+
+
+    /**
+     * Convert UserInfo → DTO
+     */
     private UserInfoDTO mapToDTO(UserInfo userInfo) {
         return new UserInfoDTO(
                 userInfo.getUserId(),
@@ -42,17 +76,15 @@ public class UserService {
         );
     }
 
+
+    /**
+     * Fetch user by username
+     */
     public UserInfoDTO getUserByUsername(String username) {
         return userRepository.findByUsername(username)
-                .map(userInfo -> new UserInfoDTO(
-                        userInfo.getUserId(),
-                        userInfo.getUsername(),
-                        userInfo.getFirstName(),
-                        userInfo.getLastName(),
-                        userInfo.getPhoneNumber(),
-                        userInfo.getEmail(),
-                        userInfo.getProfilePic()
-                ))
-                .orElseThrow(() -> new NoSuchElementException("User not found with username: " + username));
+                .map(userInfo -> mapToDTO(userInfo))
+                .orElseThrow(() -> new NoSuchElementException(
+                        "User not found with username: " + username
+                ));
     }
 }

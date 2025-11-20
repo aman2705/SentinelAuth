@@ -22,18 +22,35 @@ spring:
 
   kafka:
     producer:
-      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092,host.docker.internal:9092}
-      producer:
+      # Works in Docker + locally
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: com.aman.authservice.serializer.UserEventSerializer
+
+      properties:
+        spring.json.type.mapping: >
+          userInfoEvent:authservice.events.UserInfoEvent,
+          userEvent:authservice.events.UserEvent
+        # Reliable delivery settings
         acks: all
         retries: 3
-        max-in-flight-requests-per-connection: 1
-        key-serializer: org.apache.kafka.common.serialization.StringSerializer
-        value-serializer: com.aman.authservice.serializer.UserEventSerializer
-      topic-json:
-        name: user_service
+        max.in.flight.requests.per.connection: 1
+
+    topic-json:
+      name: user_service
 
 server:
   port: 9898
+
+# JWT configuration
+# IMPORTANT: Change JWT secret in production using JWT_SECRET environment variable
+# The secret should be at least 256 bits (32 bytes) - base64 encoded
+# Generate a secure secret: openssl rand -base64 32
+jwt:
+  secret: ${JWT_SECRET:357638792F423F4428472B4B6250655368566D597133743677397A2443264629}
+  access-token-expiration-ms: ${JWT_ACCESS_TOKEN_EXPIRATION_MS:6000000}  # 100 minutes
+  refresh-token-expiration-ms: ${JWT_REFRESH_TOKEN_EXPIRATION_MS:6000000}  # 100 minutes
 
 logging:
   level:
