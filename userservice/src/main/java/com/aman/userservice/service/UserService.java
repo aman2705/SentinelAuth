@@ -57,7 +57,7 @@ public class UserService {
                         log.info("Updating existing user | userId={} | email={}",
                                 existing.getUserId(), existing.getEmail());
                         UserInfo updated = dto.transformToUserInfo();
-                        updated.setId(existing.getId()); // Preserve existing ID
+                        updated.setUserId(existing.getUserId()); // Preserve existing ID
                         return userRepository.save(updated);
                     })
                     .orElseGet(() -> {
@@ -86,7 +86,8 @@ public class UserService {
 
     /**
      * Handles authentication events (login, logout, token refresh, password change).
-     * Logs event in auth_events table for audit trail.
+     * Note: EventLog is already saved in the consumer for idempotency tracking.
+     * This method only processes the business logic for the event.
      *
      * @param event User event to process
      * @throws IllegalArgumentException if event is invalid
@@ -108,9 +109,13 @@ public class UserService {
                 userId, eventType, event.getEventTimestamp());
 
         try {
-            EventLog eventLog = EventLog.from(event);
-            eventLogRepository.save(eventLog);
-
+            // Note: EventLog is already saved in the consumer (AuthServiceConsumer) 
+            // for idempotency tracking. We only process business logic here.
+            // If you need to log events from other sources, create EventLog with a generated eventId.
+            
+            // Business logic for auth events can be added here
+            // For example: update user last login time, trigger notifications, etc.
+            
             log.info("Auth event processed successfully | userId={} | eventType={} | timestamp={}",
                     userId, eventType, event.getEventTimestamp());
         } catch (Exception e) {

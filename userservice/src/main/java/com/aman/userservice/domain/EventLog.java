@@ -26,7 +26,7 @@ public class EventLog {
     private Long id;
 
     @Column(name = "event_id", unique = true, nullable = false)
-    private String eventId; // Unique identifier for idempotency (partition-offset or correlationId)
+    private String eventId; // Unique identifier for idempotency (topic-partition-offset or UUID)
 
     private String userId;
 
@@ -46,8 +46,19 @@ public class EventLog {
     @Column(name = "processed_at")
     private Instant processedAt;
 
+    /**
+     * Creates EventLog from UserEvent with auto-generated eventId.
+     * Use this for non-Kafka events. For Kafka events, use the consumer's EventLog creation
+     * which includes topic-partition-offset information.
+     *
+     * @param event User event
+     * @return EventLog with generated eventId
+     */
     public static EventLog from(UserEvent event) {
+        // Generate eventId using UUID for non-Kafka events
+        String eventId = "non-kafka-" + java.util.UUID.randomUUID().toString();
         return EventLog.builder()
+                .eventId(eventId)
                 .userId(event.getUserId())
                 .eventType(event.getEventType())
                 .eventTimestamp(event.getEventTimestamp())
@@ -56,8 +67,13 @@ public class EventLog {
     }
 
     /**
-     * Creates event ID for idempotency check.
+     * Creates event ID for idempotency check from Kafka metadata.
      * Format: {topic}-{partition}-{offset}
+     *
+     * @param topic Kafka topic name
+     * @param partition Kafka partition number
+     * @param offset Kafka offset
+     * @return Formatted event ID
      */
     public static String createEventId(String topic, Integer partition, Long offset) {
         return String.format("%s-%d-%d", topic, partition, offset);
