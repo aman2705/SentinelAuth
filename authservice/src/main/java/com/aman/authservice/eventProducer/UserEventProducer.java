@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
-import org.springframework.util.concurrent.ListenableFutureCallback;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -96,13 +95,17 @@ public class UserEventProducer {
     }
 
     /**
-     * Publishes an event asynchronously with callback for non-blocking operations.
+     * Publishes an event asynchronously with callbacks for non-blocking operations.
+     * Uses CompletableFuture callbacks for handling success and failure.
      *
      * @param event Event object to publish
      * @param key Partition key (typically userId)
-     * @param callback Callback to handle result or exception
+     * @param onSuccess Callback for successful publish (can be null)
+     * @param onFailure Callback for failed publish (can be null)
      */
-    public void publishAsync(Object event, String key, ListenableFutureCallback<SendResult<String, Object>> callback) {
+    public void publishAsync(Object event, String key, 
+                            java.util.function.Consumer<SendResult<String, Object>> onSuccess,
+                            java.util.function.Consumer<Throwable> onFailure) {
         String correlationId = UUID.randomUUID().toString();
         String eventType = event.getClass().getSimpleName();
 
@@ -110,37 +113,60 @@ public class UserEventProducer {
                 correlationId, eventType, topic, key);
 
         try {
-            kafkaTemplate.send(topic, key, event)
-                    .addCallback(new org.springframework.util.concurrent.ListenableFutureCallback<SendResult<String, Object>>() {
-                        @Override
-                        public void onSuccess(SendResult<String, Object> result) {
-                            log.info("Event published successfully | correlationId={} | eventType={} | topic={} | key={} | partition={} | offset={}",
-                                    correlationId,
-                                    eventType,
-                                    topic,
-                                    key,
-                                    result.getRecordMetadata().partition(),
-                                    result.getRecordMetadata().offset());
-                            if (callback != null) {
-                                callback.onSuccess(result);
-                            }
+            CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(topic, key, event);
+            
+            future.whenComplete((result, ex) -> {
+                if (ex == null) {
+                    log.info("Event published successfully | correlationId={} | eventType={} | topic={} | key={} | partition={} | offset={}",
+                            correlationId,
+                            eventType,
+                            topic,
+                            key,
+                            result.getRecordMetadata().partition(),
+                            result.getRecordMetadata().offset());
+                    if (onSuccess != null) {
+                        try {
+                            onSuccess.accept(result);
+                        } catch (Exception callbackEx) {
+                            log.error("Error in success callback | correlationId={} | error={}",
+                                    correlationId, callbackEx.getMessage(), callbackEx);
                         }
-
-                        @Override
-                        public void onFailure(Throwable ex) {
-                            log.error("Failed to publish event | correlationId={} | eventType={} | topic={} | key={} | error={}",
-                                    correlationId, eventType, topic, key, ex.getMessage(), ex);
-                            if (callback != null) {
-                                callback.onFailure(ex);
-                            }
+                    }
+                } else {
+                    log.error("Failed to publish event | correlationId={} | eventType={} | topic={} | key={} | error={}",
+                            correlationId, eventType, topic, key, ex.getMessage(), ex);
+                    if (onFailure != null) {
+                        try {
+                            onFailure.accept(ex);
+                        } catch (Exception callbackEx) {
+                            log.error("Error in failure callback | correlationId={} | error={}",
+                                    correlationId, callbackEx.getMessage(), callbackEx);
                         }
-                    });
+                    }
+                }
+            });
         } catch (Exception ex) {
             log.error("Failed to publish event | correlationId={} | eventType={} | topic={} | key={} | error={}",
                     correlationId, eventType, topic, key, ex.getMessage(), ex);
-            if (callback != null) {
-                callback.onFailure(ex);
+            if (onFailure != null) {
+                try {
+                    onFailure.accept(ex);
+                } catch (Exception callbackEx) {
+                    log.error("Error in failure callback | correlationId={} | error={}",
+                            correlationId, callbackEx.getMessage(), callbackEx);
+                }
             }
         }
+    }
+
+    /**
+     * Publishes an event asynchronously without waiting for acknowledgment.
+     * Uses fire-and-forget pattern with logging.
+     *
+     * @param event Event object to publish
+     * @param key Partition key (typically userId)
+     */
+    public void publishAsync(Object event, String key) {
+        publish(event, key, false);
     }
 }
