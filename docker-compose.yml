@@ -79,9 +79,8 @@ services:
       MYSQL_PASSWORD: password
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092  # Use internal listener for container-to-container communication
       KAFKA_TOPIC_NAME: user_service
-      # Increase HikariCP connection timeout for initial startup
+      # Increase HikariCP connection timeout for initial startup (30 seconds)
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
-      SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: 60000
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9898/auth/v1/health || exit 1"]
@@ -111,9 +110,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092  # Use internal listener for container-to-container communication
       KAFKA_TOPIC_NAME: user_service
       KAFKA_CONSUMER_GROUP_ID: user-service
-      # Increase HikariCP connection timeout for initial startup
+      # Increase HikariCP connection timeout for initial startup (30 seconds)
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
-      SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: 60000
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:9810/health || exit 1"]
