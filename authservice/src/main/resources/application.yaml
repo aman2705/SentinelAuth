@@ -15,8 +15,6 @@ spring:
       leak-detection-threshold: 60000
       idle-timeout: 300000
       max-lifetime: 600000
-      # Allow multiple connection attempts during startup
-      connection-test-query: SELECT 1
 
   jpa:
     show-sql: true

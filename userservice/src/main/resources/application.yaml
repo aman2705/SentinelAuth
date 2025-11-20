@@ -8,16 +8,10 @@ spring:
     consumer:
       group-id: ${KAFKA_CONSUMER_GROUP_ID:user-service}
       auto-offset-reset: ${KAFKA_AUTO_OFFSET_RESET:earliest}
-      enable-auto-commit: false  # Manual acknowledgment for exactly-once processing
+      enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: com.aman.userservice.deserializer.UserEventUnifiedDeserializer
       max-poll-records: 10
-      max-poll-interval-ms: 300000
-      session-timeout-ms: 45000
-      heartbeat-interval-ms: 3000
-      properties:
-        spring.json.trusted.packages: "*"
-        spring.json.type.mapping: auth:com.aman.userservice.entities.UserInfoDTO
 
     topic-json:
       name: ${KAFKA_TOPIC_NAME:user_service}  # CRITICAL: Must match producer topic
@@ -36,8 +30,6 @@ spring:
       leak-detection-threshold: 60000
       idle-timeout: 300000
       max-lifetime: 600000
-      # Allow multiple connection attempts during startup
-      connection-test-query: SELECT 1
 
   jpa:
     show-sql: true
