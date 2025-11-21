@@ -25,7 +25,7 @@ import java.time.Duration;
 
 @Slf4j
 @Aspect
-@Component
+@Component("customRateLimiterAspect")
 @RequiredArgsConstructor
 public class RateLimiterAspect {
 

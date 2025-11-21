@@ -114,7 +114,10 @@ public class RedisRateLimiterService {
     }
 
     private boolean executeRedisCommand(Supplier<Boolean> supplier) {
-        Supplier<Boolean> decorated = CircuitBreaker.decorateSupplier(redisCircuitBreaker, supplier);
+        Supplier<Boolean> decorated = io.github.resilience4j.decorators.Decorators
+                .ofSupplier(supplier)
+                .withCircuitBreaker(redisCircuitBreaker)
+                .decorate();
         try {
             return decorated.get();
         } catch (Exception ex) {
