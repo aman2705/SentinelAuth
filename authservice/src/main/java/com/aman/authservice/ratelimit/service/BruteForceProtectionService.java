@@ -49,12 +49,12 @@ public class BruteForceProtectionService {
         List<Long> result = redisTemplate.execute(
                 bruteForceScript,
                 List.of(failureKey, lockKey),
-                String.valueOf(properties.getBruteForceMaxFailures()),
-                String.valueOf(properties.getBruteForceFailureWindowSeconds()),
-                String.valueOf(properties.getBruteForceLockoutSeconds())
+                String.valueOf(properties.getBruteForce().getLimit()),
+                String.valueOf(properties.getBruteForce().getDuration().toSeconds()),
+                String.valueOf(properties.getBruteForce().getLockout().toSeconds())
         );
 
-        if (result != null && !result.isEmpty() && result.get(0) == 0) {
+        if (!result.isEmpty() && result.get(0) == 0) {
             lockoutCounter.increment();
             log.warn("Brute force lockout triggered for user: {} from IP: {}", username, ip);
         }

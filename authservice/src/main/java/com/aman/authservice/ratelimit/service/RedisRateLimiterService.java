@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Supplier;
 
 @Slf4j
@@ -115,10 +114,7 @@ public class RedisRateLimiterService {
     }
 
     private boolean executeRedisCommand(Supplier<Boolean> supplier) {
-        Supplier<Boolean> decorated = io.github.resilience4j.decorators.Decorators
-                .ofSupplier(supplier)
-                .withCircuitBreaker(redisCircuitBreaker)
-                .decorate();
+        Supplier<Boolean> decorated = CircuitBreaker.decorateSupplier(redisCircuitBreaker, supplier);
         try {
             return decorated.get();
         } catch (Exception ex) {
