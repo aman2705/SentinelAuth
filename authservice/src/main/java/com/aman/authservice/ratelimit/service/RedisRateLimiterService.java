@@ -33,8 +33,6 @@ public class RedisRateLimiterService {
     private final Counter rateLimitHitCounter;
 
     public RedisRateLimiterService(StringRedisTemplate stringRedisTemplate,
-                                   DefaultRedisScript<Long> fixedWindowScript,
-                                   DefaultRedisScript<Long> slidingWindowScript,
                                    FixedWindowBucketResolver fixedWindowBucketResolver,
                                    SlidingWindowResolver slidingWindowResolver,
                                    RateLimitKeyResolver rateLimitKeyResolver,
@@ -42,12 +40,19 @@ public class RedisRateLimiterService {
                                    RateLimitingProperties properties,
                                    MeterRegistry meterRegistry) {
         this.stringRedisTemplate = stringRedisTemplate;
-        this.fixedWindowScript = fixedWindowScript;
-        this.slidingWindowScript = slidingWindowScript;
         this.fixedWindowBucketResolver = fixedWindowBucketResolver;
         this.slidingWindowResolver = slidingWindowResolver;
         this.rateLimitKeyResolver = rateLimitKeyResolver;
         this.redisCircuitBreaker = redisCircuitBreaker;
+        
+        this.fixedWindowScript = new DefaultRedisScript<>();
+        this.fixedWindowScript.setLocation(new org.springframework.core.io.ClassPathResource("lua/fixed_window.lua"));
+        this.fixedWindowScript.setResultType(Long.class);
+
+        this.slidingWindowScript = new DefaultRedisScript<>();
+        this.slidingWindowScript.setLocation(new org.springframework.core.io.ClassPathResource("lua/sliding_window.lua"));
+        this.slidingWindowScript.setResultType(Long.class);
+
         this.rateLimitHitCounter = Counter.builder("rate_limit_hit_total")
                 .description("Total number of requests blocked by distributed rate limiting")
                 .tag("service", properties.getMetricTag())

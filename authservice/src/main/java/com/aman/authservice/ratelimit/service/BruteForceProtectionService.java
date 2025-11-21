@@ -1,105 +1,75 @@
 package com.aman.authservice.ratelimit.service;
 
 import com.aman.authservice.config.RateLimitingProperties;
-import com.aman.authservice.ratelimit.exception.BruteForceLockoutException;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 import java.util.List;
-import java.util.Locale;
-import java.util.function.Supplier;
 
 @Slf4j
 @Service
 public class BruteForceProtectionService {
 
-    private final StringRedisTemplate stringRedisTemplate;
-    private final DefaultRedisScript<Long> bruteForceScript;
+    private final StringRedisTemplate redisTemplate;
+    private final DefaultRedisScript<List> bruteForceScript;
     private final RateLimitingProperties properties;
-    private final CircuitBreaker redisCircuitBreaker;
     private final Counter lockoutCounter;
 
-    public BruteForceProtectionService(StringRedisTemplate stringRedisTemplate,
-                                       DefaultRedisScript<Long> bruteForceScript,
+    public BruteForceProtectionService(StringRedisTemplate redisTemplate,
                                        RateLimitingProperties properties,
-                                       CircuitBreaker redisCircuitBreaker,
                                        MeterRegistry meterRegistry) {
-        this.stringRedisTemplate = stringRedisTemplate;
-        this.bruteForceScript = bruteForceScript;
+        this.redisTemplate = redisTemplate;
         this.properties = properties;
-        this.redisCircuitBreaker = redisCircuitBreaker;
+
+        this.bruteForceScript = new DefaultRedisScript<>();
+        this.bruteForceScript.setLocation(new ClassPathResource("lua/brute_force.lua"));
+        this.bruteForceScript.setResultType(List.class);
+
         this.lockoutCounter = Counter.builder("brute_force_lockout_total")
-                .description("Total brute-force lockouts enforced")
-                .tag("service", properties.getMetricTag())
+                .description("Total number of brute force lockouts")
                 .register(meterRegistry);
     }
 
     public void ensureAllowed(String ip, String username) {
-        if (!execute(ip, username, "check")) {
-            lockoutCounter.increment();
-            throw new BruteForceLockoutException("Account temporarily locked due to repeated failures. Try again later.");
+        String lockKey = resolveLockKey(ip, username);
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
+            throw new RuntimeException("Account locked due to too many failed attempts. Please try again later.");
         }
     }
 
     public void recordFailure(String ip, String username) {
-        if (!execute(ip, username, "fail")) {
+        String failureKey = resolveFailureKey(ip, username);
+        String lockKey = resolveLockKey(ip, username);
+
+        List<Long> result = redisTemplate.execute(
+                bruteForceScript,
+                List.of(failureKey, lockKey),
+                String.valueOf(properties.getBruteForceMaxFailures()),
+                String.valueOf(properties.getBruteForceFailureWindowSeconds()),
+                String.valueOf(properties.getBruteForceLockoutSeconds())
+        );
+
+        if (result != null && !result.isEmpty() && result.get(0) == 0) {
             lockoutCounter.increment();
-            throw new BruteForceLockoutException("Account temporarily locked due to repeated failures. Try again later.");
+            log.warn("Brute force lockout triggered for user: {} from IP: {}", username, ip);
         }
     }
 
     public void reset(String ip, String username) {
-        execute(ip, username, "reset");
+        String failureKey = resolveFailureKey(ip, username);
+        redisTemplate.delete(failureKey);
     }
 
-    private boolean execute(String ip, String username, String mode) {
-        String composite = compositeKey(ip, username);
-        String attemptsKey = String.format("security:bf:{%s}:attempts", composite);
-        String lockKey = String.format("security:bf:{%s}:lock", composite);
-
-        RateLimitingProperties.BruteForce bf = properties.getBruteForce();
-
-        Supplier<Boolean> supplier = () -> {
-            Long response = stringRedisTemplate.execute(
-                    bruteForceScript,
-                    List.of(attemptsKey, lockKey),
-                    String.valueOf(bf.getLimit()),
-                    String.valueOf(bf.getDuration().toMillis()),
-                    String.valueOf(bf.getLockout().toMillis()),
-                    mode
-            );
-            return response == null || response == 1L;
-        };
-
-        Supplier<Boolean> decorated = io.github.resilience4j.decorators.Decorators
-                .ofSupplier(supplier)
-                .withCircuitBreaker(redisCircuitBreaker)
-                .decorate();
-
-        try {
-            return decorated.get();
-        } catch (Exception ex) {
-            log.error("Redis brute-force protection fallback - allowing request", ex);
-            return true;
-        }
+    private String resolveFailureKey(String ip, String username) {
+        return String.format("bf:fail:%s:%s", ip, username);
     }
 
-    private String compositeKey(String ip, String username) {
-        String safeIp = sanitize(ip);
-        String safeUser = sanitize(username);
-        return safeIp + ":" + safeUser;
-    }
-
-    private String sanitize(String value) {
-        if (!StringUtils.hasText(value)) {
-            return "unknown";
-        }
-        return value.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9:\\-\\.]", "_");
+    private String resolveLockKey(String ip, String username) {
+        return String.format("bf:lock:%s:%s", ip, username);
     }
 }
-

@@ -1,25 +1,22 @@
+-- fixed_window.lua
+-- KEYS[1]: rate limit key
+-- ARGV[1]: limit
+-- ARGV[2]: window size in milliseconds
+
 local key = KEYS[1]
-local max_requests = tonumber(ARGV[1])
-local window_millis = tonumber(ARGV[2])
+local limit = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
 
-if max_requests <= 0 then
-    return 1
-end
-
-local current = redis.call("GET", key)
-if current and tonumber(current) >= max_requests then
-    return 0
-end
-
-current = redis.call("INCR", key)
+local current = redis.call('INCR', key)
 
 if current == 1 then
-    redis.call("PEXPIRE", key, window_millis)
+    redis.call('PEXPIRE', key, window)
 end
 
-if current > max_requests then
-    return 0
+local ttl = redis.call('PTTL', key)
+
+if current > limit then
+    return {0, ttl} -- 0 indicates blocked
+else
+    return {1, ttl} -- 1 indicates allowed
 end
-
-return 1
-

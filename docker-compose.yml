@@ -66,6 +66,22 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+    restart: unless-stopped
+
+  # ---------------- Redis ----------------
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   # ---------------- Auth Service ----------------
   authservice:
     build:
@@ -77,6 +93,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "9898:9898"
     environment:
@@ -87,6 +105,8 @@ services:
       MYSQL_PASSWORD: password
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092  # internal container-to-container
       KAFKA_TOPIC_NAME: user_service
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
     restart: on-failure
     healthcheck:

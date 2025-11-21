@@ -1,41 +1,34 @@
-local attempts_key = KEYS[1]
-local lock_key = KEYS[2]
+-- brute_force.lua
+-- KEYS[1]: failure count key
+-- KEYS[2]: lockout key
+-- ARGV[1]: max failures
+-- ARGV[2]: failure window in seconds
+-- ARGV[3]: lockout duration in seconds
 
-local max_attempts = tonumber(ARGV[1])
-local window_millis = tonumber(ARGV[2])
-local lockout_millis = tonumber(ARGV[3])
-local mode = ARGV[4]
+local failure_key = KEYS[1]
+local lockout_key = KEYS[2]
+local max_failures = tonumber(ARGV[1])
+local failure_window = tonumber(ARGV[2])
+local lockout_duration = tonumber(ARGV[3])
 
-if mode == "check" then
-    if redis.call("EXISTS", lock_key) == 1 then
-        return 0
-    end
-    return 1
+-- Check if locked out
+if redis.call('EXISTS', lockout_key) == 1 then
+    local ttl = redis.call('TTL', lockout_key)
+    return {0, ttl} -- 0: Locked, return remaining TTL
 end
 
-if mode == "fail" then
-    if redis.call("EXISTS", lock_key) == 1 then
-        return 0
-    end
+-- Increment failure count
+local failures = redis.call('INCR', failure_key)
 
-    local attempts = redis.call("INCR", attempts_key)
-    if attempts == 1 then
-        redis.call("PEXPIRE", attempts_key, window_millis)
-    end
-
-    if attempts >= max_attempts then
-        redis.call("SET", lock_key, "locked", "PX", lockout_millis)
-        redis.call("DEL", attempts_key)
-        return 0
-    end
-    return 1
+if failures == 1 then
+    redis.call('EXPIRE', failure_key, failure_window)
 end
 
-if mode == "reset" then
-    redis.call("DEL", attempts_key)
-    redis.call("DEL", lock_key)
-    return 1
+if failures >= max_failures then
+    redis.call('SET', lockout_key, "LOCKED")
+    redis.call('EXPIRE', lockout_key, lockout_duration)
+    redis.call('DEL', failure_key) -- Reset failures after lockout
+    return {0, lockout_duration} -- Locked
 end
 
-return 1
-
+return {1, 0} -- 1: Allowed
