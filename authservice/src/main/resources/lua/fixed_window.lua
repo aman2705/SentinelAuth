@@ -16,7 +16,7 @@ end
 local ttl = redis.call('PTTL', key)
 
 if current > limit then
-    return {0, ttl} -- 0 indicates blocked
+    return 0 -- 0 indicates blocked
 else
-    return {1, ttl} -- 1 indicates allowed
+    return 1 -- 1 indicates allowed
 end

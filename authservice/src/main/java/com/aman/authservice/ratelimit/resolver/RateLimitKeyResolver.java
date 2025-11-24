@@ -27,15 +27,16 @@ public class RateLimitKeyResolver {
         this.refreshTokenService = refreshTokenService;
     }
 
-    public String resolve(RateLimitKeyStrategy strategy, RateLimitRequestMetadata metadata) {
+    public String resolve(String limiterName, RateLimitKeyStrategy strategy, RateLimitRequestMetadata metadata) {
         String ip = sanitize(metadata.ip());
         String username = sanitize(metadata.username());
         String tenant = sanitize(metadata.tenant());
+        String safeLimiterName = sanitize(limiterName);
 
         return switch (strategy) {
-            case IP -> String.format("rl:ip:%s", ip);
-            case IP_USERNAME -> String.format("rl:ip-user:%s:%s", ip, username);
-            case IP_USERNAME_TENANT -> String.format("rl:ip-user-tenant:%s:%s:%s", ip, username, tenant);
+            case IP -> String.format("rl:%s:ip:%s", safeLimiterName, ip);
+            case IP_USERNAME -> String.format("rl:%s:ip-user:%s:%s", safeLimiterName, ip, username);
+            case IP_USERNAME_TENANT -> String.format("rl:%s:ip-user-tenant:%s:%s:%s", safeLimiterName, ip, username, tenant);
         };
     }
 

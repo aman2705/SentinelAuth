@@ -32,6 +32,8 @@ public class RedisRateLimiterService {
     private final Counter rateLimitHitCounter;
 
     public RedisRateLimiterService(StringRedisTemplate stringRedisTemplate,
+                                   DefaultRedisScript<Long> fixedWindowScript,
+                                   DefaultRedisScript<Long> slidingWindowScript,
                                    FixedWindowBucketResolver fixedWindowBucketResolver,
                                    SlidingWindowResolver slidingWindowResolver,
                                    RateLimitKeyResolver rateLimitKeyResolver,
@@ -39,18 +41,13 @@ public class RedisRateLimiterService {
                                    RateLimitingProperties properties,
                                    MeterRegistry meterRegistry) {
         this.stringRedisTemplate = stringRedisTemplate;
+        this.fixedWindowScript = fixedWindowScript;
+        this.slidingWindowScript = slidingWindowScript;
+
         this.fixedWindowBucketResolver = fixedWindowBucketResolver;
         this.slidingWindowResolver = slidingWindowResolver;
         this.rateLimitKeyResolver = rateLimitKeyResolver;
         this.redisCircuitBreaker = redisCircuitBreaker;
-
-        this.fixedWindowScript = new DefaultRedisScript<>();
-        this.fixedWindowScript.setLocation(new org.springframework.core.io.ClassPathResource("lua/fixed_window.lua"));
-        this.fixedWindowScript.setResultType(Long.class);
-
-        this.slidingWindowScript = new DefaultRedisScript<>();
-        this.slidingWindowScript.setLocation(new org.springframework.core.io.ClassPathResource("lua/sliding_window.lua"));
-        this.slidingWindowScript.setResultType(Long.class);
 
         this.rateLimitHitCounter = Counter.builder("rate_limit_hit_total")
                 .description("Total number of requests blocked by distributed rate limiting")
@@ -81,7 +78,7 @@ public class RedisRateLimiterService {
                     String.valueOf(limit),
                     String.valueOf(window.toMillis())
             );
-            return result == null || result == 1L;
+            return result == 1L;
         });
     }
 
@@ -95,22 +92,22 @@ public class RedisRateLimiterService {
                     String.valueOf(window.toMillis()),
                     String.valueOf(slidingWindowResolver.nowMillis())
             );
-            return result == null || result == 1L;
+            return result == 1L;
         });
     }
 
     private boolean allowFixedWindow(RateLimiterDefinition definition, RateLimitKeyResolver.RateLimitRequestMetadata metadata) {
-        String baseKey = resolveBaseKey(definition.getFixedWindowKeyStrategy(), metadata);
+        String baseKey = resolveBaseKey(definition.getName(), definition.getFixedWindowKeyStrategy(), metadata);
         return allowFixedWindow(baseKey, definition.getFixedWindowLimit(), definition.getFixedWindowDuration());
     }
 
     private boolean allowSlidingWindow(RateLimiterDefinition definition, RateLimitKeyResolver.RateLimitRequestMetadata metadata) {
-        String baseKey = resolveBaseKey(definition.getSlidingWindowKeyStrategy(), metadata);
+        String baseKey = resolveBaseKey(definition.getName(), definition.getSlidingWindowKeyStrategy(), metadata);
         return allowSlidingWindow(baseKey, definition.getSlidingWindowLimit(), definition.getSlidingWindowDuration());
     }
 
-    private String resolveBaseKey(RateLimitKeyStrategy strategy, RateLimitKeyResolver.RateLimitRequestMetadata metadata) {
-        return rateLimitKeyResolver.resolve(strategy, metadata);
+    private String resolveBaseKey(String limiterName, RateLimitKeyStrategy strategy, RateLimitKeyResolver.RateLimitRequestMetadata metadata) {
+        return rateLimitKeyResolver.resolve(limiterName, strategy, metadata);
     }
 
     private boolean executeRedisCommand(Supplier<Boolean> supplier) {
