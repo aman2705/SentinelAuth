@@ -43,7 +43,7 @@ public class RedisRateLimiterService {
         this.slidingWindowResolver = slidingWindowResolver;
         this.rateLimitKeyResolver = rateLimitKeyResolver;
         this.redisCircuitBreaker = redisCircuitBreaker;
-        
+
         this.fixedWindowScript = new DefaultRedisScript<>();
         this.fixedWindowScript.setLocation(new org.springframework.core.io.ClassPathResource("lua/fixed_window.lua"));
         this.fixedWindowScript.setResultType(Long.class);
@@ -114,12 +114,10 @@ public class RedisRateLimiterService {
     }
 
     private boolean executeRedisCommand(Supplier<Boolean> supplier) {
-        Supplier<Boolean> decorated = io.github.resilience4j.decorators.Decorators
-                .ofSupplier(supplier)
-                .withCircuitBreaker(redisCircuitBreaker)
-                .decorate();
         try {
-            return decorated.get();
+            return CircuitBreaker
+                    .decorateSupplier(redisCircuitBreaker, supplier)
+                    .get();
         } catch (Exception ex) {
             log.error("Redis rate limiter fallback - allowing request due to Redis/CircuitBreaker state", ex);
             return true;

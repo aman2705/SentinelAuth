@@ -38,8 +38,7 @@ public class AuthServiceConsumer {
 
     /**
      * Consumes events from Kafka with idempotency checks and error handling.
-     * 
-     * CRITICAL FIX: Changed topic from "user-events" to match producer topic "user_service"
+     *
      * 
      * @param record Kafka consumer record with metadata
      * @param acknowledgment Manual acknowledgment for exactly-once processing

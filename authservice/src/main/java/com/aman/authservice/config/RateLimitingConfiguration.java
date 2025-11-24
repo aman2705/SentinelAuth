@@ -43,6 +43,11 @@ public class RateLimitingConfiguration {
     }
 
     @Bean
+    public CircuitBreakerRegistry circuitBreakerRegistry() {
+        return CircuitBreakerRegistry.ofDefaults();
+    }
+
+    @Bean
     public CircuitBreaker redisCircuitBreaker(CircuitBreakerRegistry registry) {
         return registry.circuitBreaker("redisRateLimiter");
     }
