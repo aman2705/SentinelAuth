@@ -46,6 +46,20 @@ spring:
     topic-json:
       name: ${KAFKA_TOPIC_NAME:user_service}  # CRITICAL: Must match consumer topic
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2s}
+
+      lettuce:
+        pool:
+          max-active: 32
+          max-idle: 16
+          min-idle: 4
+          max-wait: 5s
+
 server:
   port: 9898
 
@@ -72,3 +86,36 @@ security:
   basic:
     enable: false
   ignored: "/**"
+
+sentinel:
+  rate-limit:
+    tenant-header: ${TENANT_HEADER:X-Tenant-ID}
+    metric-tag: authservice
+    fixed-window:
+      limit: 5
+      duration: 60s
+    sliding-window:
+      limit: 10
+      duration: 300s
+    brute-force:
+      limit: 3
+      duration: 300s
+      lockout: 900s
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      redisRateLimiter:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 4
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus

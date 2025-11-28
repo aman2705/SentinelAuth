@@ -1,6 +1,7 @@
 package com.aman.authservice.config;
 
 import com.aman.authservice.auth.JwtAuthFilter;
+import com.aman.authservice.ratelimit.interceptor.RateLimitContextInterceptor;
 import com.aman.authservice.service.JwtService;
 import com.aman.authservice.service.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Spring Security configuration.
@@ -37,9 +40,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 @EnableMethodSecurity
 @RequiredArgsConstructor
-public class SecurityConfig {
+public class SecurityConfig implements WebMvcConfigurer {
 
     private final UserDetailsServiceImpl userDetailsServiceImpl;
+    private final RateLimitContextInterceptor rateLimitContextInterceptor;
 
     /**
      * Password encoder bean using BCrypt.
@@ -134,5 +138,10 @@ public class SecurityConfig {
         SecurityFilterChain chain = http.build();
         log.info("Security filter chain configured");
         return chain;
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(rateLimitContextInterceptor).addPathPatterns("/**");
     }
 }

@@ -38,14 +38,13 @@ public class AuthServiceConsumer {
 
     /**
      * Consumes events from Kafka with idempotency checks and error handling.
-     * 
-     * CRITICAL FIX: Changed topic from "user-events" to match producer topic "user_service"
+     *
      * 
      * @param record Kafka consumer record with metadata
      * @param acknowledgment Manual acknowledgment for exactly-once processing
      */
     @KafkaListener(
-            topics = "${spring.kafka.topic-json.name:user_service}", // FIXED: Now matches producer topic
+            topics = "${spring.kafka.topic-json.name:user_service}",
             groupId = "${spring.kafka.consumer.group-id:user-service}",
             containerFactory = "kafkaListenerContainerFactory"
     )
